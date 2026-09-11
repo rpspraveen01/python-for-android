@@ -21,6 +21,13 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
 
     depends = ['sdl2', 'sdl2_image', 'sdl2_mixer', 'sdl2_ttf', 'setuptools', 'jpeg', 'png']
     hostpython_prerequisites = ["setuptools", "Cython<3.2"]
+
+    patches = [
+        ('patches/0002-arm64-surface-simd-blitters-template.patch',
+         lambda arch, recipe: arch.arch == 'arm64-v8a'),
+        ('patches/0003-arm64-surface-simd-blitters-setup.patch',
+         lambda arch, recipe: arch.arch == 'arm64-v8a'),
+    ]
     call_hostpython_via_targetpython = False  # Due to setuptools
     install_in_hostpython = False
 
