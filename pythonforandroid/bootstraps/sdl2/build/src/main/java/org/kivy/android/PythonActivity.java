@@ -15,6 +15,9 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.util.Log;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
@@ -34,6 +37,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 import org.kivy.android.launcher.Project;
 import org.libsdl.app.SDLActivity;
+import org.libsdl.app.SDLSurface;
 import org.renpy.android.ResourceManager;
 
 public class PythonActivity extends SDLActivity {
@@ -44,6 +48,7 @@ public class PythonActivity extends SDLActivity {
     private ResourceManager resourceManager = null;
     private Bundle mMetaData = null;
     private PowerManager.WakeLock mWakeLock = null;
+    private volatile boolean mNativeTornDown = false;
 
     public String getAppRoot() {
         String app_root = getFilesDir().getAbsolutePath() + "/app";
@@ -219,6 +224,48 @@ public class PythonActivity extends SDLActivity {
 
     public static SurfaceView getSurface() {
         return mSurface;
+    }
+
+    @Override
+    protected SDLSurface createSDLSurface(Context context) {
+        return new FencedSDLSurface(context);
+    }
+
+    private class FencedSDLSurface extends SDLSurface
+            implements SurfaceHolder.Callback, View.OnKeyListener, View.OnTouchListener {
+        FencedSDLSurface(Context context) {
+            super(context);
+        }
+
+        @Override
+        public void surfaceCreated(SurfaceHolder holder) {
+            if (mNativeTornDown) return;
+            super.surfaceCreated(holder);
+        }
+
+        @Override
+        public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+            if (mNativeTornDown) return;
+            super.surfaceChanged(holder, format, width, height);
+        }
+
+        @Override
+        public void surfaceDestroyed(SurfaceHolder holder) {
+            if (mNativeTornDown) return;
+            super.surfaceDestroyed(holder);
+        }
+
+        @Override
+        public boolean onKey(View v, int keyCode, KeyEvent event) {
+            if (mNativeTornDown) return false;
+            return super.onKey(v, keyCode, event);
+        }
+
+        @Override
+        public boolean onTouch(View v, MotionEvent event) {
+            if (mNativeTornDown) return false;
+            return super.onTouch(v, event);
+        }
     }
 
     // ----------------------------------------------------------------------------
@@ -548,7 +595,19 @@ public class PythonActivity extends SDLActivity {
     }
 
     @Override
+    protected void onDestroy() {
+        mNativeTornDown = true;
+        if (mLayout != null && mSurface != null && mSurface.getParent() != null) {
+            mLayout.removeView(mSurface);
+        }
+        super.onDestroy();
+    }
+
+    @Override
     public void onWindowFocusChanged(boolean hasFocus) {
+        if (mNativeTornDown) {
+            return;
+        }
         try {
             super.onWindowFocusChanged(hasFocus);
         } catch (UnsatisfiedLinkError e) {
